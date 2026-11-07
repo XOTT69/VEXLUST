@@ -1,7 +1,6 @@
-# SexOpt integration — preview mode
+# SexOpt — streaming XML catalog
+Source feed: https://smtm.com.ua/_prices/import-retail-ua-2.xml (published at https://sexopt.com.ua/ua/vygruzki/).
 
-Source: https://sexopt.com.ua/ua/vygruzki/ . Supplier publishes Ukrainian XML for product listings. Current implementation fetches server-side from fixed URL https://smtm.com.ua/_prices/import-retail-ua-2.xml , parses candidate YML/XML records and returns up to 300 items in GET /api/catalog. 2-hour source revalidation and hourly CDN cache. Product fields may vary; verify mappings with actual feed response and add tests before launch.
+The complete feed is about 76MB (observed in Vercel runtime logs, Nov 7 2026). Never buffer it entirely. SAX streaming reader parses up to 240 in-stock products from the beginning and cancels the HTTP stream early (maximum 25 MB). No full-file Next.js fetch caching. A production full-index import must run separately in a background job into PostgreSQL, followed by incremental price/stock sync. Photo copyrights and supplier agreement need verification before commercial use.
 
-Failure is explicit 503; never show mock stock as if real. Price and stock are supplier-provided and not a binding offer. Frontend checkout remains disabled pending registration, provider approval and full legal compliance. Confirm drop-shipping partnership and image rights before commercial use.
-
-Next steps: inspect real XML, strict schema mapping, full daily snapshot and incremental stock updates, category mapping, real product pages, database, permissioned dashboard, checkout, fiscalization and fulfillment.
+Checkout, payments and fulfillment remain disabled. Product names, prices and images are raw supplier data, not guaranteed up-to-date.

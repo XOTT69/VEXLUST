@@ -1,64 +1,80 @@
-import {XMLParser} from "fast-xml-parser";
+import sax from "sax";
 import type {Product} from "./catalog";
+
 const FEED_URL="https://smtm.com.ua/_prices/import-retail-ua-2.xml";
-type AnyRow=Record<string,unknown>;
-const pick=(v:unknown):string=>{
- if(v===null||v===undefined)return "";
- if(typeof v==="string"||typeof v==="number")return String(v).trim();
- if(Array.isArray(v))return pick(v[0]);
- if(typeof v==="object"){const o=v as AnyRow;return pick(o["#text"]??o["__cdata"]??o["@_url"]??o["url"]??"")}
+const LIMIT=240;
+type Raw={attrs:Record<string,string>;data:Record<string,string>;images:string[]};
+const clean=(value:string)=>value.replace(/<[^>]*>/g," ").replace(/\s+/g," ").trim();
+function select(obj:Record<string,string>,...keys:string[]){
+ for(const key of keys)if(obj[key.toLowerCase()])return obj[key.toLowerCase()];
  return "";
-};
-function field(row:AnyRow,...keys:string[]):unknown{
- for(const key of keys){if(row[key]!==undefined)return row[key];const real=Object.keys(row).find(k=>k.toLowerCase()===key.toLowerCase());if(real)return row[real]}
- return undefined;
 }
-function traverse(node:unknown,depth=0):AnyRow[]{
- if(depth>8||node===null||typeof node!=="object")return [];
- if(Array.isArray(node)){if(node.length&&node.some(i=>i&&typeof i==="object"&&("name" in i||"title" in i||"Назва" in i)))return node as AnyRow[];return node.flatMap(item=>traverse(item,depth+1))}
- const obj=node as AnyRow;
- for(const key of ["offer","offers","product","products","item","items","товар","товари"]){
-  const target=field(obj,key);
-  if(target){const found=traverse(target,depth+1);if(found.length)return found}
- }
- if(field(obj,"name","title","назва")&&field(obj,"price","ціна","priceRUAH"))return [obj];
- return Object.values(obj).flatMap(value=>traverse(value,depth+1)).slice(0,10000);
-}
-function safeImage(v:unknown):string|undefined{
- let raw=pick(v);
- if(!raw&&typeof v==="object"&&v!==null){const o=v as AnyRow;raw=pick(field(o,"picture","image","img","url","src"))}
- try{const url=new URL(raw);return url.protocol==="https:"||url.protocol==="http:"?url.href:undefined}catch{return undefined}
-}
-function normalized(row:AnyRow):Product|null{
- const id=pick(field(row,"@_id","id","vendorCode","sku","article","articul","артикул","код"));
- const name=pick(field(row,"name","title","назва","Наименование","product_name"));
- const rawPrice=pick(field(row,"price","priceRUAH","retail_price","ціна","price_retail","priceUAH")).replace(/\s/g,"").replace(",",".");
- const price=Number(rawPrice);
- if(!id||!name||name.length>200||!Number.isFinite(price)||price<=0||price>1000000)return null;
- const stock=pick(field(row,"available","@_available","stock","in_stock","presence","наявність","quantity")).toLowerCase();
- if(["false","0","no","нет","немає","відсутній"].includes(stock))return null;
- const description=pick(field(row,"description","опис","desc")).replace(/<[^>]*>/g," ").replace(/\s+/g," ").slice(0,350);
- const categorySource=pick(field(row,"category","categoryName","category_id","categoryId","категорія")).toLowerCase();
+function normalize(raw:Raw):Product|null{
+ const row=raw.data,attr=raw.attrs;
+ const id=select(attr,"id","sku","code")||select(row,"id","vendorcode","article","articul","артикул","код","sku");
+ const name=clean(select(row,"name","title","назва","наименование","product_name")).slice(0,220);
+ const priceValue=select(row,"price","priceruah","retail_price","ціна","price_retail","priceuah").replace(/\s/g,"").replace(",",".");
+ const price=Number(priceValue);
+ if(!id||!name||!Number.isFinite(price)||price<=0||price>1000000)return null;
+ const available=(select(attr,"available")||select(row,"available","in_stock","stock","presence","наявність","quantity")).toLowerCase();
+ if(["false","0","no","нет","немає","відсутній"].includes(available))return null;
+ const categoryText=(select(row,"category","categoryname","category_id","categoryid","категорія")+" "+name).toLowerCase();
  let category="Аксесуари";
- if(/космет|догляд|лубрикан|змазк|масажн.*ол/.test(categorySource+" "+name.toLowerCase()))category="Догляд";
- else if(/для двох|пар|набор|комплект/.test(categorySource+" "+name.toLowerCase()))category="Для двох";
- else if(/чолов|мужчин|простата/.test(categorySource+" "+name.toLowerCase()))category="Для нього";
- else if(/жіноч|женщин|вібратор/.test(categorySource+" "+name.toLowerCase()))category="Для неї";
- const image=safeImage(field(row,"picture","image","image_url","photo","img","фото","pictures"));
- return {id:"sexopt-"+id,name,category,price:Math.round(price*100)/100,color:"#f0e2e6",description:description||"Інформація від постачальника",image};
+ if(/космет|догляд|лубрикан|змазк|мастил|масажн.*ол/.test(categoryText))category="Догляд";
+ else if(/для двох|для пар|парн|набор|комплект/.test(categoryText))category="Для двох";
+ else if(/чолов|мужчин|простата/.test(categoryText))category="Для нього";
+ else if(/жіноч|женщин|вібратор/.test(categoryText))category="Для неї";
+ const rawImage=raw.images[0]||select(row,"picture","image","image_url","photo","img");
+ let image:string|undefined;
+ try{const u=new URL(rawImage);if(["https:","http:"].includes(u.protocol))image=u.href}catch{}
+ const description=clean(select(row,"description","опис","desc")).slice(0,300);
+ return {id:"sexopt-"+id,name,price:Math.round(price*100)/100,category,color:"#efe0e5",image,description:description||"Опис постачальника"};
 }
+/** Read only the start of the 76MB feed; never buffer or cache the complete XML. */
 export async function getSupplierProducts():Promise<Product[]>{
- const response=await fetch(FEED_URL,{next:{revalidate:7200},signal:AbortSignal.timeout(20000),headers:{"Accept":"application/xml,text/xml,*/*"}});
- if(!response.ok)throw new Error("Supplier HTTP "+response.status);
- const len=Number(response.headers.get("content-length")||0);
- if(len>40_000_000)throw new Error("Feed size exceeds 40 MB");
- const xml=await response.text();
- if(xml.length>40_000_000)throw new Error("Feed exceeds 40 MB");
- const parser=new XMLParser({ignoreAttributes:false,parseTagValue:false,processEntities:false,trimValues:true});
- const root=parser.parse(xml);
- const candidates=traverse(root);
- const unique=new Map<string,Product>();
- for(const row of candidates){const product=normalized(row);if(product&&!unique.has(product.id))unique.set(product.id,product);if(unique.size>=300)break}
- if(unique.size===0)throw new Error("No compatible catalog entries in supplier XML");
- return [...unique.values()];
+ const response=await fetch(FEED_URL,{cache:"no-store",signal:AbortSignal.timeout(25000),headers:{"Accept":"application/xml,text/xml,*/*"}});
+ if(!response.ok||!response.body)throw Error("Supplier HTTP "+response.status);
+ const reader=response.body.getReader();
+ const decoder=new TextDecoder();
+ const parser=sax.parser(false,{trim:true,normalize:false,lowercase:true,xmlns:false});
+ const products:Product[]=[];
+ const seen=new Set<string>();
+ const stack:string[]=[];
+ let current:Raw|null=null;
+ let targetDepth=-1;
+ let bytes=0;
+ let streamError:Error|null=null;
+ parser.onerror=(err)=>{streamError=err;};
+ parser.onopentag=(node)=>{
+   const tag=node.name.toLowerCase();
+   stack.push(tag);
+   if((tag==="offer"||tag==="product"||tag==="item"||tag==="товар")&&current===null){
+     const attrs:Record<string,string>={};
+     for(const [key,value] of Object.entries(node.attributes))attrs[key.toLowerCase()]=String(value);
+     current={attrs,data:{},images:[]};
+     targetDepth=stack.length;
+   }
+ };
+ parser.ontext=(text)=>{if(!current||stack.length<=targetDepth)return;const field=stack[stack.length-1];const previous=current.data[field]||"";if(previous.length<600)current.data[field]=(previous+text).slice(0,600);};
+ parser.oncdata=(text)=>{if(!current||stack.length<=targetDepth)return;const field=stack[stack.length-1];const previous=current.data[field]||"";if(previous.length<600)current.data[field]=(previous+text).slice(0,600);};
+ parser.onclosetag=(name)=>{
+   const tag=name.toLowerCase();
+   if(current&&stack.length===targetDepth&&["offer","product","item","товар"].includes(tag)){
+     const product=normalize(current);
+     if(product&&!seen.has(product.id)){seen.add(product.id);products.push(product)}
+     current=null;targetDepth=-1;
+   }
+   stack.pop();
+ };
+ try{
+  while(products.length<LIMIT&&bytes<25_000_000){
+   const {done,value}=await reader.read();
+   if(done)break;
+   bytes+=value.byteLength;
+   parser.write(decoder.decode(value,{stream:true}));
+   if(streamError)throw streamError;
+  }
+ }finally{await reader.cancel().catch(()=>{});}
+ if(products.length===0)throw Error("No valid product records in XML start, bytes read: "+bytes);
+ return products;
 }
