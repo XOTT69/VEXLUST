@@ -13,5 +13,16 @@ parser.onopentag=node=>{const tag=node.name.toLowerCase();stack.push(tag);if(cur
 parser.ontext=text=>{if(!current||stack.length<=depth)return;const tag=stack[stack.length-1];const old=current.data[tag]||"";if(old.length<5000)current.data[tag]=(old+text).slice(0,5000)};
 parser.oncdata=text=>{if(!current||stack.length<=depth)return;const tag=stack[stack.length-1];const old=current.data[tag]||"";if(old.length<5000)current.data[tag]=(old+text).slice(0,5000)};
 parser.onclosetag=name=>{const tag=name.toLowerCase();if(current&&tag==="param"&&paramName){const value=clean(current.data.param||"");if(value)current.specs[paramName]=value.slice(0,300);delete current.data.param;paramName=""}if(current&&["picture","image","photo","img"].includes(tag)&&stack.length>depth){const url=current.data[tag]?.trim();if(url)current.images.push(url);delete current.data[tag]}if(current&&stack.length===depth&&["offer","product","item","товар"].includes(tag)){const p=normalize(current);if(p)batch.push(p);current=null;depth=-1}stack.pop()};
-async function flush(){if(!batch.length)return;const chunk=batch.filter(p=>p!==null);batch=[];const client=await db.connect();try{await client.query("BEGIN");for(const p of chunk){if(!p)continue;await client.query("INSERT INTO store_products(id,name,category,sku,price,payload,updated_at) VALUES($1,$2,$3,$4,$5,$6,now()) ON CONFLICT (id) DO UPDATE SET name=excluded.name,category=excluded.category,sku=excluded.sku,price=excluded.price,payload=excluded.payload,updated_at=now()",[p.id,p.name,p.category,p.sku||"",p.price,JSON.stringify(p)]);processed++}await client.query("COMMIT")}catch(e){await client.query("ROLLBACK");throw e}finally{client.release()}console.log("Imported",processed)}
+async function flush(){
+ if(!batch.length)return;
+ const chunk=batch.filter((p):p is NonNullable<typeof p>=>p!==null);
+ batch=[];
+ const items=chunk.map(p=>({id:p.id,name:p.name,category:p.category,sku:p.sku||"",price:p.price,payload:p}));
+ await db.query(
+  "INSERT INTO store_products(id,name,category,sku,price,payload,updated_at) SELECT id,name,category,sku,price,payload,now() FROM jsonb_to_recordset($1::jsonb) AS item(id text,name text,category text,sku text,price numeric,payload jsonb) ON CONFLICT(id) DO UPDATE SET name=excluded.name,category=excluded.category,sku=excluded.sku,price=excluded.price,payload=excluded.payload,updated_at=now()",
+  [JSON.stringify(items)]
+ );
+ processed+=chunk.length;
+ if(processed%1000<chunk.length)console.log("Imported",processed);
+}
 try{await db.query("SELECT id FROM store_products LIMIT 1");const reader=response.body.getReader();const decoder=new TextDecoder();while(true){const {done,value}=await reader.read();if(done)break;parser.write(decoder.decode(value,{stream:true}));if(batch.length>=150)await flush()}parser.write(decoder.decode());parser.close();await flush();console.log("Import complete:",processed)}finally{await db.end()}
