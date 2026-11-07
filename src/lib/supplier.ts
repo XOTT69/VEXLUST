@@ -1,6 +1,6 @@
 import {XMLParser} from "fast-xml-parser";
 import type {Product} from "./catalog";
-const URL="https://smtm.com.ua/_prices/import-retail-ua-2.xml";
+const FEED_URL="https://smtm.com.ua/_prices/import-retail-ua-2.xml";
 type AnyRow=Record<string,unknown>;
 const pick=(v:unknown):string=>{
  if(v===null||v===undefined)return "";
@@ -48,7 +48,7 @@ function normalized(row:AnyRow):Product|null{
  return {id:"sexopt-"+id,name,category,price:Math.round(price*100)/100,color:"#f0e2e6",description:description||"Інформація від постачальника",image};
 }
 export async function getSupplierProducts():Promise<Product[]>{
- const response=await fetch(URL,{next:{revalidate:7200},signal:AbortSignal.timeout(20000),headers:{"Accept":"application/xml,text/xml,*/*"}});
+ const response=await fetch(FEED_URL,{next:{revalidate:7200},signal:AbortSignal.timeout(20000),headers:{"Accept":"application/xml,text/xml,*/*"}});
  if(!response.ok)throw new Error("Supplier HTTP "+response.status);
  const len=Number(response.headers.get("content-length")||0);
  if(len>40_000_000)throw new Error("Feed size exceeds 40 MB");
