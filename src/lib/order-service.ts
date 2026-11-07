@@ -35,7 +35,7 @@ export async function submitOrder(user:{id:string;email:string},payload:NewOrder
  });
  if(total<1||total>25_000_000)throw Error("Order exceeds allowable amount");
  // Require recent import before accepting any commercial order.
- const freshness=await conn.query("SELECT MAX(updated_at) AS last_sync FROM store_products");
+ const freshness=await conn.query("SELECT MAX(updated_at) AS last_sync FROM store_products WHERE is_active=true");
  const last=Number(new Date(freshness.rows[0]?.last_sync||0));
  if(!last||Date.now()-last>2*60*60*1000)throw Error("Supplier data is too old; checkout disabled");
  const existing=await conn.query("SELECT id,status,total_kopecks FROM store_order_requests WHERE user_id=$1 AND idempotency_key=$2",[user.id,payload.idempotencyKey]);

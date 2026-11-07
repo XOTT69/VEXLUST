@@ -7,7 +7,7 @@ function getPool(){if(!process.env.DATABASE_URL)throw Error("Database not config
 export type SearchQuery={page:number;limit:number;q:string;category:string;sort:string;brand:string;minPrice?:number;maxPrice?:number};
 export async function findProducts(query:SearchQuery):Promise<{products:Product[];total:number}>{
  const db=getPool();
- const conditions:string[]=[];const args:unknown[]=[];
+ const conditions:string[]=["is_active=true"];const args:unknown[]=[];
  if(query.q){args.push("%"+query.q+"%");conditions.push("(name ILIKE $"+args.length+" OR sku ILIKE $"+args.length+")")}
  if(query.category&&query.category!=="Усі"){const taxon=types.find(t=>t.label===query.category);args.push(taxon?taxon.sql:query.category);conditions.push(taxon?"name ~* $"+args.length:"category=$"+args.length)}
  if(query.brand){args.push(query.brand);conditions.push("LOWER(payload->>'brand')=LOWER($"+args.length+")")}
@@ -22,20 +22,20 @@ export async function findProducts(query:SearchQuery):Promise<{products:Product[
  return {products:rows.rows.map(r=>r.payload as Product),total};
 }
 export async function findProductById(id:string):Promise<{product:Product|null;related:Product[]}>{
- const db=getPool();const result=await db.query("SELECT payload,category FROM store_products WHERE id=$1",[id]);if(!result.rowCount)return {product:null,related:[]};
+ const db=getPool();const result=await db.query("SELECT payload,category FROM store_products WHERE id=$1 AND is_active=true",[id]);if(!result.rowCount)return {product:null,related:[]};
  const product=result.rows[0].payload as Product;
  const family=kindOf(product);
  if(family==="Інше")return {product,related:[]};
  const taxon=types.find(t=>t.label===family);
  if(!taxon)return {product,related:[]};
  // Only rank products of the *same actual product family*, not an entire broad group.
- const candidates=await db.query("SELECT payload FROM store_products WHERE id<>$1 AND (name ~* $2 OR category=$3) ORDER BY CASE WHEN name ~* $2 THEN 0 ELSE 1 END, ABS(LN(GREATEST(price,1) / $4::numeric)) ASC LIMIT 850",[id,taxon.sql,product.category,Math.max(1,product.price)]);
+ const candidates=await db.query("SELECT payload FROM store_products WHERE is_active=true AND id<>$1 AND (name ~* $2 OR category=$3) ORDER BY CASE WHEN name ~* $2 THEN 0 ELSE 1 END, ABS(LN(GREATEST(price,1) / $4::numeric)) ASC LIMIT 850",[id,taxon.sql,product.category,Math.max(1,product.price)]);
  return {product,related:rankSimilar(product,candidates.rows.map(r=>r.payload as Product),6)};
 }
 
 export async function findProductsByIds(ids:string[]):Promise<Product[]>{
  if(!ids.length)return [];
- const results=await getPool().query("SELECT payload FROM store_products WHERE id=ANY($1::text[])",[ids]);
+ const results=await getPool().query("SELECT payload FROM store_products WHERE is_active=true AND id=ANY($1::text[])",[ids]);
  const mapped=new Map<string,Product>(results.rows.map(row=>{const p=row.payload as Product;return [p.id,p]}));
  return ids.flatMap(id=>mapped.has(id)?[mapped.get(id)!]:[]);
 }
@@ -43,8 +43,8 @@ export async function findProductsByIds(ids:string[]):Promise<Product[]>{
 export async function getCatalogFilters():Promise<{brands:{name:string;count:number}[];minPrice:number;maxPrice:number;count:number}>{
  const client=getPool();
  const [brands,stats]=await Promise.all([
-  client.query("SELECT payload->>'brand' AS name,count(*)::int AS count FROM store_products WHERE COALESCE(payload->>'brand','') <> '' GROUP BY name ORDER BY count DESC LIMIT 30"),
-  client.query("SELECT count(*)::int AS count, coalesce(min(price),0) AS min, coalesce(max(price),0) AS max FROM store_products")
+  client.query("SELECT payload->>'brand' AS name,count(*)::int AS count FROM store_products WHERE is_active=true AND COALESCE(payload->>'brand','') <> '' GROUP BY name ORDER BY count DESC LIMIT 30"),
+  client.query("SELECT count(*)::int AS count, coalesce(min(price),0) AS min, coalesce(max(price),0) AS max FROM store_products WHERE is_active=true")
  ]);
  return {brands:brands.rows.filter(x=>x.name&&x.name.length<90).map(x=>({name:String(x.name),count:Number(x.count)})),minPrice:Number(stats.rows[0]?.min||0),maxPrice:Number(stats.rows[0]?.max||0),count:Number(stats.rows[0]?.count||0)};
 }
