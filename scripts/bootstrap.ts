@@ -17,7 +17,7 @@ if(!connectionString){
   await db.end();
   if(count===0){
    console.log("First initialization: importing complete SexOpt product feed.");
-   await import("./import-sexopt.ts");
+   await import("./import-sexopt");
   }else console.log("Catalog already present; skipping import during build.");
  }catch(error){
   await db.end().catch(()=>{});
