@@ -11,8 +11,17 @@ export const types=[
 {label:"БДСМ аксесуари",regex:/наручник|пов'язк|маск.*оч|bdsm|батіг|плетк/i,sql:"наручник|пов'язк|маск.*оч|bdsm|батіг|плетк"},
 {label:"Вібратори",regex:/вібратор|vibrator|вібромасажер|вібростимул/i,sql:"вібратор|vibrator|вібромасажер|вібростимул"}
 ];
+types.push(
+ {label:"Фалоімітатори",regex:/фалоімітатор|дилдо|dildo/i,sql:"фалоімітатор|дилдо|dildo"},
+ {label:"Анальні товари",regex:/анальн|анальна пробк|anal plug|butt plug/i,sql:"анальн|анальна пробк|anal plug|butt plug"}
+);
 export const shopCategories=["Усі","Для неї","Для нього","Для двох","Догляд","Аксесуари",...types.map(t=>t.label)];
-export const kindOf=(p:Pick<Product,"name"|"description">):string=>types.find(t=>t.regex.test(p.name))?.label||types.find(t=>t.regex.test(p.description.slice(0,120)))?.label||"Інше";
+export const kindOf=(p:Pick<Product,"name"|"description">):string=>{
+ const order=["Презервативи","Лубриканти","Креми та косметика","Білизна","Для чоловіків","Кліторальні стимулятори","БДСМ аксесуари","Для пар","Набори","Фалоімітатори","Анальні товари","Вібратори"];
+ for(const key of order){const t=types.find(t=>t.label===key);if(t?.regex.test(p.name))return key}
+ for(const key of order){const t=types.find(t=>t.label===key);if(t?.regex.test(p.description.slice(0,120)))return key}
+ return "Інше";
+};
 const stop=new Set(["для","and","the","мл","гель","набір","новий","чорний","білий"]);
 function words(p:Product){return new Set((p.name+" "+(p.brand||"")).toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(w=>w.length>3&&!stop.has(w)))}
 export function rankSimilar(base:Product,candidates:Product[],limit=6):Product[]{

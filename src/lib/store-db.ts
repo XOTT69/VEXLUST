@@ -29,3 +29,10 @@ export async function findProductById(id:string):Promise<{product:Product|null;r
  const candidates=await db.query("SELECT payload FROM store_products WHERE id<>$1 AND (name ~* $2 OR category=$3) LIMIT 1000",[id,taxon.sql,product.category]);
  return {product,related:rankSimilar(product,candidates.rows.map(r=>r.payload as Product),6)};
 }
+
+export async function findProductsByIds(ids:string[]):Promise<Product[]>{
+ if(!ids.length)return [];
+ const results=await getPool().query("SELECT payload FROM store_products WHERE id=ANY($1::text[])",[ids]);
+ const mapped=new Map<string,Product>(results.rows.map(row=>{const p=row.payload as Product;return [p.id,p]}));
+ return ids.flatMap(id=>mapped.has(id)?[mapped.get(id)!]:[]);
+}
