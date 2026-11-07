@@ -18,7 +18,7 @@
     "lucide-react": "^0.468.0",
     "sax": "^1.4.1",
     "pg": "^8.13.3",
-    "@neondatabase/auth": "0.7.0-beta"
+    "@neondatabase/auth": "0.5.0-beta"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
