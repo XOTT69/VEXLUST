@@ -24,11 +24,10 @@ function normalize(raw:Raw):Product|null{
  else if(/для двох|для пар|парн|набор|комплект/.test(categoryText))category="Для двох";
  else if(/чолов|мужчин|простата/.test(categoryText))category="Для нього";
  else if(/жіноч|женщин|вібратор/.test(categoryText))category="Для неї";
- const rawImage=raw.images[0]||select(row,"picture","image","image_url","photo","img");
- let image:string|undefined;
- try{const u=new URL(rawImage);if(["https:","http:"].includes(u.protocol))image=u.href}catch{}
+ const images=[...new Set((raw.images.length?raw.images:[select(row,"picture","image","image_url","photo","img")]).map(v=>v.trim()).filter(Boolean).filter(v=>{try{const u=new URL(v);return u.protocol==="https:"||u.protocol==="http:"}catch{return false}}))].slice(0,15);
+ const image=images[0];
  const description=clean(select(row,"description","опис","desc")).slice(0,300);
- return {id:"sexopt-"+id,name,price:Math.round(price*100)/100,category,color:"#efe0e5",image,description:description||"Опис постачальника"};
+ return {id:"sexopt-"+id,name,price:Math.round(price*100)/100,category,color:"#efe0e5",image,images,description:description||"Опис постачальника"};
 }
 /** Read only the start of the 76MB feed; never buffer or cache the complete XML. */
 export async function getSupplierProducts():Promise<Product[]>{
