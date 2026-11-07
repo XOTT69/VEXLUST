@@ -18,7 +18,7 @@ export default function ProductPage(){
  const [items,setItems]=useState<Product[]>([]),[status,setStatus]=useState<"loading"|"ready"|"error">("loading");
  const [age,setAge]=useState(false),[added,setAdded]=useState(false);
  useEffect(()=>{setAge(sessionStorage.getItem("vexlust-age")==="yes")},[]);
- useEffect(()=>{let active=true;fetch("/api/catalog").then(r=>{if(!r.ok)throw Error("Catalog unavailable");return r.json()}).then(data=>{if(active){setItems(Array.isArray(data.products)?data.products:[]);setStatus("ready")}}).catch(()=>{if(active)setStatus("error")});return()=>{active=false}},[]);
+ useEffect(()=>{if(!id)return;let active=true;fetch("/api/products/"+encodeURIComponent(id)).then(async r=>{if(r.status===404)return {product:null,related:[]};if(!r.ok)throw Error("Product unavailable");return r.json()}).then(data=>{if(active){setItems([...(data.product?[data.product]:[]),...(data.related||[])]);setStatus("ready")}}).catch(()=>{if(active)setStatus("error")});return()=>{active=false}},[id]);
  const product=items.find(p=>p.id===id);
  const related=product?items.filter(p=>p.id!==product.id&&p.category===product.category).slice(0,4):[];
  function add(){if(!product)return;try{const old=JSON.parse(localStorage.getItem("vexlust-cart")||"{}");const valid=old&&typeof old==="object"&&!Array.isArray(old)?old:{};const n=Number(valid[product.id]||0);valid[product.id]=Math.min(50,(Number.isInteger(n)&&n>0?n:0)+1);localStorage.setItem("vexlust-cart",JSON.stringify(valid));setAdded(true)}catch{setAdded(false)}}

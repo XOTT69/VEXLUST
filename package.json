@@ -6,20 +6,25 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "import:sexopt": "tsx scripts/import-sexopt.ts",
+    "db:migrate": "tsx scripts/migrate.ts"
   },
   "dependencies": {
     "next": "^15.5.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "lucide-react": "^0.468.0",
-    "sax": "^1.4.1"
+    "sax": "^1.4.1",
+    "pg": "^8.13.3"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "typescript": "^5.8.0",
-    "@types/sax": "^1.2.7"
+    "@types/sax": "^1.2.7",
+    "@types/pg": "^8.11.13",
+    "tsx": "^4.20.3"
   }
 }

@@ -3,13 +3,13 @@ import type {Product} from "./catalog";
 
 const FEED_URL="https://smtm.com.ua/_prices/import-retail-ua-2.xml";
 const LIMIT=240;
-type Raw={attrs:Record<string,string>;data:Record<string,string>;images:string[];specs:Record<string,string>};
+export type Raw={attrs:Record<string,string>;data:Record<string,string>;images:string[];specs:Record<string,string>};
 const clean=(value:string)=>value.replace(/<[^>]*>/g," ").replace(/\s+/g," ").trim();
 function select(obj:Record<string,string>,...keys:string[]){
  for(const key of keys)if(obj[key.toLowerCase()])return obj[key.toLowerCase()];
  return "";
 }
-function normalize(raw:Raw):Product|null{
+export function normalize(raw:Raw):Product|null{
  const row=raw.data,attr=raw.attrs;
  const id=select(attr,"id","sku","code")||select(row,"id","vendorcode","article","articul","артикул","код","sku");
  const name=clean(select(row,"name","title","назва","наименование","product_name")).slice(0,220);

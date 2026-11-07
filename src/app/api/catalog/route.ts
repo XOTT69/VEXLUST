@@ -1,8 +1,24 @@
-import {NextResponse} from "next/server";
+import {NextRequest,NextResponse} from "next/server";
 import {getSupplierProducts} from "@/lib/supplier";
+import {databaseEnabled,findProducts} from "@/lib/store-db";
 export const runtime="nodejs";
 export const maxDuration=30;
-export async function GET(){
- try{const products=await getSupplierProducts();return NextResponse.json({mode:"supplier-preview",supplier:"SexOpt",checkoutEnabled:false,count:products.length,products},{headers:{"Cache-Control":"public, s-maxage=3600, stale-while-revalidate=3600"}})}
- catch(error){console.error("Supplier catalog unavailable",error);return NextResponse.json({mode:"unavailable",products:[],checkoutEnabled:false,message:"Supplier feed unavailable"},{status:503,headers:{"Cache-Control":"no-store"}})}
+const clamp=(value:string|null,def:number,max:number)=>{const n=Number(value);return Number.isSafeInteger(n)&&n>0?Math.min(n,max):def};
+export async function GET(request:NextRequest){
+ const sp=request.nextUrl.searchParams;
+ const page=clamp(sp.get("page"),1,100000),limit=clamp(sp.get("limit"),24,48);
+ const q=(sp.get("q")||"").trim().slice(0,100),category=(sp.get("category")||"Усі").slice(0,70),sort=(sp.get("sort")||"new").slice(0,30);
+ try{
+  if(databaseEnabled()){
+   const {products,total}=await findProducts({page,limit,q,category,sort});
+   return NextResponse.json({mode:"database",checkoutEnabled:false,products,total,page,pages:Math.ceil(total/limit)},{headers:{"Cache-Control":"public, s-maxage=90, stale-while-revalidate=180"}});
+  }
+  const all=await getSupplierProducts();
+  const filtered=all.filter(p=>(category==="Усі"||p.category===category)&&(!q||(p.name+" "+p.description+" "+(p.sku||"")).toLowerCase().includes(q.toLowerCase())));
+  if(sort==="price_asc")filtered.sort((a,b)=>a.price-b.price);
+  else if(sort==="price_desc")filtered.sort((a,b)=>b.price-a.price);
+  else if(sort==="name")filtered.sort((a,b)=>a.name.localeCompare(b.name,"uk"));
+  const products=filtered.slice((page-1)*limit,page*limit);
+  return NextResponse.json({mode:"supplier-preview",checkoutEnabled:false,products,total:filtered.length,page,pages:Math.ceil(filtered.length/limit),notice:"Preview only. Full catalog requires DATABASE_URL and background import."},{headers:{"Cache-Control":"public, s-maxage=180, stale-while-revalidate=600"}});
+ }catch(error){console.error("Catalog error",error);return NextResponse.json({mode:"unavailable",checkoutEnabled:false,products:[],message:"Catalog unavailable"},{status:503,headers:{"Cache-Control":"no-store"}})}
 }
