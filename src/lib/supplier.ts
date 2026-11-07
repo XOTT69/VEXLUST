@@ -76,5 +76,6 @@ export async function getSupplierProducts():Promise<Product[]>{
   }
  }finally{await reader.cancel().catch(()=>{});}
  if(products.length===0)throw Error("No valid product records in XML start, bytes read: "+bytes);
+ console.info("Supplier image diagnostics",JSON.stringify(products.slice(0,3).map(p=>({id:p.id,image:p.image}))));
  return products;
 }
