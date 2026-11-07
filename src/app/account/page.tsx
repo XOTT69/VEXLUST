@@ -1,0 +1,12 @@
+"use client";
+import Link from "next/link";
+import {useEffect,useState} from "react";
+import {Heart,LogOut,ShoppingBag,UserRound} from "lucide-react";
+import {authClient} from "@/lib/auth/client";
+type Draft={id:string;createdAt:string;count:number;total:number;city?:string;warehouse?:string};
+export default function Account(){
+ const {data:session,isPending}=authClient.useSession();
+ const [favorites,setFavorites]=useState(0),[drafts,setDrafts]=useState<Draft[]>([]);
+ useEffect(()=>{try{const favs=JSON.parse(localStorage.getItem("vexlust-favorites-v1")||"[]");if(Array.isArray(favs))setFavorites(favs.length)}catch{}try{const saved=JSON.parse(localStorage.getItem("vexlust-order-drafts")||"[]");if(Array.isArray(saved))setDrafts(saved.slice(0,30))}catch{}},[]);
+ return <main className="customer-page"><header className="customer-header"><Link href="/" className="brand">VEX<span>LUST</span><i>✦</i></Link><Link href="/cart"><ShoppingBag size={18}/> Кошик</Link></header><div className="account-wrap"><span className="eyebrow">PERSONAL SPACE</span><h1>Особистий кабінет</h1>{isPending?<p>Перевіряємо сесію…</p>:!session?.user?<div className="customer-panel"><UserRound size={30}/><h2>Увійдіть або створіть акаунт</h2><p>Доступ через Neon Auth. Чернетки й обране поки зберігаються лише на цьому пристрої.</p><Link className="primary" href="/auth/sign-in">Увійти</Link><Link href="/auth/sign-up">Створити акаунт</Link></div>:<div className="customer-panel"><h2>Вітаємо, {session.user.name||session.user.email}</h2><p>Акаунт активний. Історію реальних замовлень додамо після запуску продажів.</p><button className="secondary-action" onClick={async()=>{await authClient.signOut();window.location.assign("/account")}}><LogOut size={16}/> Вийти</button></div>}<div className="account-cards"><Link href="/#catalog"><Heart/><strong>Обране</strong><span>{favorites} товарів на цьому пристрої</span></Link><Link href="/cart"><ShoppingBag/><strong>Кошик і чернетки</strong><span>{drafts.length} збережених чернеток</span></Link></div>{drafts.length>0&&<div className="draft-history"><h2>Чернетки оформлення</h2><p>Ці записи не надсилалися продавцю. Вони збережені лише у браузері.</p>{drafts.map(d=><div key={d.id}><span>{new Date(d.createdAt).toLocaleDateString("uk-UA")} · {d.count} од.</span><strong>{d.total.toLocaleString("uk-UA")} грн</strong><small>{d.city||""} {d.warehouse||""}</small></div>)}</div>}</div></main>
+}
