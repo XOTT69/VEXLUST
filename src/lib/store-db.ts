@@ -4,12 +4,15 @@ import {types,kindOf,rankSimilar} from "@/lib/taxonomy";
 let pool:Pool|undefined;
 export const databaseEnabled=()=>!!process.env.DATABASE_URL;
 function getPool(){if(!process.env.DATABASE_URL)throw Error("Database not configured");if(!pool)pool=new Pool({connectionString:process.env.DATABASE_URL,max:3,connectionTimeoutMillis:6000,ssl:process.env.DATABASE_URL.includes("localhost")?false:{rejectUnauthorized:false}});return pool}
-export type SearchQuery={page:number;limit:number;q:string;category:string;sort:string};
+export type SearchQuery={page:number;limit:number;q:string;category:string;sort:string;brand:string;minPrice?:number;maxPrice?:number};
 export async function findProducts(query:SearchQuery):Promise<{products:Product[];total:number}>{
  const db=getPool();
  const conditions:string[]=[];const args:unknown[]=[];
  if(query.q){args.push("%"+query.q+"%");conditions.push("(name ILIKE $"+args.length+" OR sku ILIKE $"+args.length+")")}
  if(query.category&&query.category!=="Усі"){const taxon=types.find(t=>t.label===query.category);args.push(taxon?taxon.sql:query.category);conditions.push(taxon?"name ~* $"+args.length:"category=$"+args.length)}
+ if(query.brand){args.push(query.brand);conditions.push("LOWER(payload->>'brand')=LOWER($"+args.length+")")}
+ if(query.minPrice!==undefined){args.push(query.minPrice);conditions.push("price >= $"+args.length)}
+ if(query.maxPrice!==undefined){args.push(query.maxPrice);conditions.push("price <= $"+args.length)}
  const where=conditions.length?"WHERE "+conditions.join(" AND "):"";
  const allowed:Record<string,string>={new:"updated_at DESC",price_asc:"price ASC",price_desc:"price DESC",name:"name ASC"};
  const order=allowed[query.sort]||"name ASC";
@@ -35,4 +38,13 @@ export async function findProductsByIds(ids:string[]):Promise<Product[]>{
  const results=await getPool().query("SELECT payload FROM store_products WHERE id=ANY($1::text[])",[ids]);
  const mapped=new Map<string,Product>(results.rows.map(row=>{const p=row.payload as Product;return [p.id,p]}));
  return ids.flatMap(id=>mapped.has(id)?[mapped.get(id)!]:[]);
+}
+
+export async function getCatalogFilters():Promise<{brands:{name:string;count:number}[];minPrice:number;maxPrice:number;count:number}>{
+ const client=getPool();
+ const [brands,stats]=await Promise.all([
+  client.query("SELECT payload->>'brand' AS name,count(*)::int AS count FROM store_products WHERE COALESCE(payload->>'brand','') <> '' GROUP BY name ORDER BY count DESC LIMIT 30"),
+  client.query("SELECT count(*)::int AS count, coalesce(min(price),0) AS min, coalesce(max(price),0) AS max FROM store_products")
+ ]);
+ return {brands:brands.rows.filter(x=>x.name&&x.name.length<90).map(x=>({name:String(x.name),count:Number(x.count)})),minPrice:Number(stats.rows[0]?.min||0),maxPrice:Number(stats.rows[0]?.max||0),count:Number(stats.rows[0]?.count||0)};
 }

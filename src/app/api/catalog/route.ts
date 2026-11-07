@@ -8,15 +8,17 @@ const clamp=(value:string|null,def:number,max:number)=>{const n=Number(value);re
 export async function GET(request:NextRequest){
  const sp=request.nextUrl.searchParams;
  const page=clamp(sp.get("page"),1,100000),limit=clamp(sp.get("limit"),24,48);
- const q=(sp.get("q")||"").trim().slice(0,100),category=(sp.get("category")||"Усі").slice(0,70),sort=(sp.get("sort")||"new").slice(0,30);
+ const q=(sp.get("q")||"").trim().slice(0,100),category=(sp.get("category")||"Усі").slice(0,70),sort=(sp.get("sort")||"new").slice(0,30),brand=(sp.get("brand")||"").slice(0,90);
+ const parsePrice=(v:string|null)=>{if(!v||!/^\d{1,7}(\.\d{1,2})?$/.test(v))return undefined;const n=Number(v);return Number.isFinite(n)?n:undefined};
+ const minPrice=parsePrice(sp.get("minPrice")),maxPrice=parsePrice(sp.get("maxPrice"));
  try{
   if(databaseEnabled()){
-   const {products,total}=await findProducts({page,limit,q,category,sort});
+   const {products,total}=await findProducts({page,limit,q,category,sort,brand,minPrice,maxPrice});
    return NextResponse.json({mode:"database",checkoutEnabled:false,products,total,page,pages:Math.ceil(total/limit)},{headers:{"Cache-Control":"public, s-maxage=90, stale-while-revalidate=180"}});
   }
   const all=await getSupplierProducts();
   const sub=types.find(t=>t.label===category);
-  const filtered=all.filter(p=>(category==="Усі"||(sub?sub.regex.test(p.name):p.category===category))&&(!q||(p.name+" "+p.description+" "+(p.sku||"")).toLowerCase().includes(q.toLowerCase())));
+  const filtered=all.filter(p=>(category==="Усі"||(sub?sub.regex.test(p.name):p.category===category))&&(!q||(p.name+" "+p.description+" "+(p.sku||"")).toLowerCase().includes(q.toLowerCase()))&&(!brand||p.brand?.toLowerCase()===brand.toLowerCase())&&(minPrice===undefined||p.price>=minPrice)&&(maxPrice===undefined||p.price<=maxPrice));
   if(sort==="price_asc")filtered.sort((a,b)=>a.price-b.price);
   else if(sort==="price_desc")filtered.sort((a,b)=>b.price-a.price);
   else if(sort==="name")filtered.sort((a,b)=>a.name.localeCompare(b.name,"uk"));
