@@ -1,5 +1,21 @@
 # VEXLUST
 
-Privacy-first Ukrainian intimate wellness e-commerce storefront (18+).
+Адаптивний demo-магазин інтимних товарів 18+ (Україна). **Не приймає реальні замовлення чи платежі.**
 
-Initial version is a demo storefront, **not** a live shop. Payments, fulfillment and supplier syncing must be configured and approved before launch.
+## Можливості
+- Стильна responsive-сторінка, підтвердження віку в деморежимі.
+- Категорії, пошук, кошик із localStorage.
+- GET /api/catalog повертає демонстраційний каталог.
+- PostgreSQL DDL у db/schema.sql для постачальників, товарів, замовлень, оплат і відправок.
+- docs/INTEGRATIONS.md описує безпечне підключення зовнішніх сервісів.
+
+## Локальний запуск
+Node.js 20+; npm install; npm run dev; відкрити http://localhost:3000.
+
+## Деплой
+Імпортувати GitHub XOTT69/VEXLUST у Vercel (Next.js framework). Для демоверсії секрети не потрібні.
+
+## Перед запуском продажів
+Юридичний аудит, погоджений платіжний провайдер, ПРРО, реальний фід та перевірені залишки, захищена адмінка й оформлення замовлень, тестові відправки, політика приватності, повернення.
+
+Важливо: логотип, асортимент, ціни та залишки поки демонстраційні.
