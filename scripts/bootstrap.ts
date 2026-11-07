@@ -11,6 +11,7 @@ if(!connectionString){
  const db=new Pool({connectionString,max:1,connectionTimeoutMillis:12000,ssl:connectionString.includes("localhost")?false:{rejectUnauthorized:false}});
  try{
   await db.query(await readFile("db/001_store_products.sql","utf8"));
+  await db.query(await readFile("db/002_order_requests.sql","utf8"));
   const result=await db.query("SELECT count(*)::int AS count FROM store_products");
   const count=Number(result.rows[0].count);
   console.log("Neon database connected. Existing catalog size:",count);
