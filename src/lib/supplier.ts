@@ -59,6 +59,11 @@ export async function getSupplierProducts():Promise<Product[]>{
  parser.oncdata=(text)=>{if(!current||stack.length<=targetDepth)return;const field=stack[stack.length-1];const previous=current.data[field]||"";if(previous.length<600)current.data[field]=(previous+text).slice(0,600);};
  parser.onclosetag=(name)=>{
    const tag=name.toLowerCase();
+   if(current&&["picture","image","photo","img"].includes(tag)&&stack.length>targetDepth){
+      const url=current.data[tag]?.trim();
+      if(url)current.images.push(url);
+      delete current.data[tag];
+   }
    if(current&&stack.length===targetDepth&&["offer","product","item","товар"].includes(tag)){
      const product=normalize(current);
      if(product&&!seen.has(product.id)){seen.add(product.id);products.push(product)}
@@ -76,6 +81,6 @@ export async function getSupplierProducts():Promise<Product[]>{
   }
  }finally{await reader.cancel().catch(()=>{});}
  if(products.length===0)throw Error("No valid product records in XML start, bytes read: "+bytes);
- console.info("Supplier image diagnostics",JSON.stringify(products.slice(0,3).map(p=>({id:p.id,image:p.image}))));
+
  return products;
 }
