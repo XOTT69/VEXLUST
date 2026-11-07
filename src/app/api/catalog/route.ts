@@ -1,6 +1,7 @@
 import {NextRequest,NextResponse} from "next/server";
 import {getSupplierProducts} from "@/lib/supplier";
 import {databaseEnabled,findProducts} from "@/lib/store-db";
+import {types} from "@/lib/taxonomy";
 export const runtime="nodejs";
 export const maxDuration=30;
 const clamp=(value:string|null,def:number,max:number)=>{const n=Number(value);return Number.isSafeInteger(n)&&n>0?Math.min(n,max):def};
@@ -14,7 +15,8 @@ export async function GET(request:NextRequest){
    return NextResponse.json({mode:"database",checkoutEnabled:false,products,total,page,pages:Math.ceil(total/limit)},{headers:{"Cache-Control":"public, s-maxage=90, stale-while-revalidate=180"}});
   }
   const all=await getSupplierProducts();
-  const filtered=all.filter(p=>(category==="Усі"||p.category===category)&&(!q||(p.name+" "+p.description+" "+(p.sku||"")).toLowerCase().includes(q.toLowerCase())));
+  const sub=types.find(t=>t.label===category);
+  const filtered=all.filter(p=>(category==="Усі"||(sub?sub.regex.test(p.name):p.category===category))&&(!q||(p.name+" "+p.description+" "+(p.sku||"")).toLowerCase().includes(q.toLowerCase())));
   if(sort==="price_asc")filtered.sort((a,b)=>a.price-b.price);
   else if(sort==="price_desc")filtered.sort((a,b)=>b.price-a.price);
   else if(sort==="name")filtered.sort((a,b)=>a.name.localeCompare(b.name,"uk"));
