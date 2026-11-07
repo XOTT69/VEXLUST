@@ -31,6 +31,14 @@ export function rankSimilar(base:Product,candidates:Product[],limit=6):Product[]
   const tokens=words(p);let score=0;for(const w of baseWords)if(tokens.has(w))score+=3;
   if(base.brand&&p.brand&&base.brand.toLowerCase()===p.brand.toLowerCase())score+=15;
   if(p.category===base.category)score+=8;
+  // Equivalent supplier specifications improve relevance within a product family.
+  const a=Object.entries(base.specs||{}).filter(([k,v])=>k&&v).map(([k,v])=>[k.toLocaleLowerCase("uk-UA").trim(),v.toLocaleLowerCase("uk-UA").trim()]);
+  const b=new Map(Object.entries(p.specs||{}).filter(([k,v])=>k&&v).map(([k,v])=>[k.toLocaleLowerCase("uk-UA").trim(),v.toLocaleLowerCase("uk-UA").trim()]));
+  for(const [key,value] of a){
+   const candidate=b.get(key);
+   if(candidate&&candidate===value)score+=7;
+   else if(candidate&&value.length>5&&(candidate.includes(value)||value.includes(candidate)))score+=3;
+  }
   score+=Math.max(0,18-12*Math.abs(Math.log(Math.max(1,p.price)/Math.max(1,base.price))));
   if(p.image)score+=2;
   return {p,score};

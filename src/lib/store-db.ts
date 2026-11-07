@@ -29,7 +29,7 @@ export async function findProductById(id:string):Promise<{product:Product|null;r
  const taxon=types.find(t=>t.label===family);
  if(!taxon)return {product,related:[]};
  // Only rank products of the *same actual product family*, not an entire broad group.
- const candidates=await db.query("SELECT payload FROM store_products WHERE id<>$1 AND (name ~* $2 OR category=$3) LIMIT 1000",[id,taxon.sql,product.category]);
+ const candidates=await db.query("SELECT payload FROM store_products WHERE id<>$1 AND (name ~* $2 OR category=$3) ORDER BY CASE WHEN name ~* $2 THEN 0 ELSE 1 END, ABS(LN(GREATEST(price,1) / $4::numeric)) ASC LIMIT 850",[id,taxon.sql,product.category,Math.max(1,product.price)]);
  return {product,related:rankSimilar(product,candidates.rows.map(r=>r.payload as Product),6)};
 }
 
